@@ -18,7 +18,6 @@
             --grey: #d1d1d1;
         }
 
-        /* 📱 2. SCROLL + TOUCH FIX (CSS) */
         * {
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
@@ -46,7 +45,6 @@
             padding: 20px;
         }
 
-        /* Task 2: Applied Scroll Consistency */
         .scrollable-screen {
             display: none;
             flex-direction: column;
@@ -61,6 +59,7 @@
             scroll-behavior: smooth;
         }
 
+        /* 🧩 1. FIX: Background applies ONLY to main menu, not Student Screen */
         .bg-menu {
             background-image: url('menu_bg.jpg'); 
             background-size: cover;
@@ -155,7 +154,6 @@
         .btn-whole-sentence { background-color: #ffd93d; margin-bottom: 1vh; font-size: 1.3rem; }
         .btn-reset { background-color: #ff9aa2; color: white; }
 
-        /* 🧩 1. STUDENT NUMBER GRID LAYOUT */
         .number-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -179,7 +177,6 @@
 
         .num-box.selected { background-color: var(--grey) !important; }
 
-        /* Chibi Boxes */
         .chibi-box {
             width: 90%;
             min-height: 15vh;
@@ -254,7 +251,7 @@
         }
     </style>
 </head>
-<body>
+<body id="app-body">
 
 <div id="container" class="app-container bg-menu">
     <header id="app-header">
@@ -284,7 +281,8 @@
             </div>
             <div class="btn-group">
                 <button style="background:var(--peach)" id="save-local-btn">💾 SAVE LOCAL</button>
-                <button class="btn-reset" id="reset-input-btn">🔄 RESET</button> <button style="background:var(--blue)" id="export-btn">📤 EXPORT</button>
+                <button class="btn-reset" id="reset-btn">🔄 RESET</button>
+                <button style="background:var(--blue)" id="export-btn">📤 EXPORT</button>
                 <button style="background:var(--lavender)" id="import-trigger">📥 IMPORT</button>
                 <input type="file" id="fileInput" style="display:none" accept=".json">
                 <button style="background:#ddd" id="close-input-btn">CLOSE</button>
@@ -299,11 +297,11 @@
 
     <div id="choice-screen" class="scrollable-screen"></div>
 
-    <div id="reading-screen" class="scrollable-screen bg-practice" style="position:fixed; top:0; left:0; z-index:100; padding-top: 20px;">
+    <div id="reading-screen" class="scrollable-screen bg-practice" style="position:fixed; top:0; left:0; z-index:100; padding: 20px 0;">
         <div class="recording-container">
-            <button id="btn-record" class="btn-rec">🎤 Record</button>
-            <button id="btn-stop-rec" class="btn-stop" disabled>⏹ Stop</button>
-            <button id="btn-play-rec" class="btn-play-rec" disabled>▶️ Play</button>
+            <button id="btn-record" class="btn-rec">Record 錄音</button>
+            <button id="btn-stop-rec" class="btn-stop" disabled>Stop 停止</button>
+            <button id="btn-play-rec" class="btn-play-rec" disabled>Play 播放</button>
             <span id="rec-status" class="rec-status"></span>
         </div>
         
@@ -320,9 +318,6 @@
 </div>
 
 <script>
-    /* ============================================================
-       📘 8. DEFAULT CONTENT
-       ============================================================ */
     const DEFAULT_DATA = {
         title: "Page 30: The Big Bad Wolf and the House of Bricks",
         sentences: [
@@ -333,29 +328,31 @@
         ]
     };
 
-    /* ============================================================
-       📱 2. GLOBAL TOUCH FIX
-       ============================================================ */
-    let touchMoved = false;
-    document.addEventListener("touchstart", () => {
-        touchMoved = false;
-    }, { passive: true });
-    document.addEventListener("touchmove", () => {
-        touchMoved = true;
-    }, { passive: true });
+    const synth = window.speechSynthesis;
+    let preferredVoice = null;
+    let isReadingSentence = false;
+    let currentSentenceText = "";
+    let studentNumber = 0; 
+    let audioURL = "";
+    let playbackAudio = new Audio();
+    let mediaRecorder;
+    let audioChunks = [];
 
-    function attachClick(el, callback) {
-        el.addEventListener("click", function(e) {
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxczU9EnszQOoW-c4IzinmReW6MEXJRIpxPvMfYeqCT7OgEwq3vDrx6qO7iUBLNhFEkIQ/exec";
+
+    // Global Touch Fix
+    let touchMoved = false;
+    document.addEventListener("touchstart", () => { touchMoved = false; }, { passive: true });
+    document.addEventListener("touchmove", () => { touchMoved = true; }, { passive: true });
+
+    function addClick(el, fn) {
+        el.addEventListener("click", (e) => {
             if (touchMoved) return;
-            callback(e);
+            fn(e);
         });
     }
 
-    /* ============================================================
-       ☁️ 4. GOOGLE DRIVE AUTO UPLOAD (FINAL)
-       ============================================================ */
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwpP5mSqlhhKPT3Uicq_pstOKrYdYcEbxurE8jt8FohLxocZxYVVRA_QKjB7gR910jM/exec";
-
+    // ☁️ Upload Logic
     async function uploadToDrive(blob, fileName) {
         const reader = new FileReader();
         reader.onloadend = async function () {
@@ -365,73 +362,46 @@
             formData.append("fileName", fileName);
 
             try {
-                // Task 4: Mode no-cors for direct trigger from GitHub Pages
-                await fetch(SCRIPT_URL, {
+                const response = await fetch(SCRIPT_URL, {
                     method: "POST",
-                    body: formData,
-                    mode: "no-cors"
+                    body: formData
                 });
-                alert("✅ Upload sent! Check Google Drive.");
+                alert("✅ Recording uploaded successfully!");
             } catch (error) {
-                console.error(error);
                 alert("❌ Upload failed.");
             }
         };
         reader.readAsDataURL(blob);
     }
 
-    /* ============================================================
-       🎤 3, 5, 6. VOICE RECORDING SYSTEM
-       ============================================================ */
-    let mediaRecorder;
-    let audioChunks = [];
-    let studentNumber = 0;
-    let audioURL = "";
-    let playbackAudio = new Audio();
-
-    // 🔊 6. UNLOCK AUDIO FOR IPAD
-    document.body.addEventListener("click", function() {
-        let unlock = new Audio();
-        unlock.play().catch(()=>{});
-    }, { once: true });
-
+    // 🎤 Recording Logic
     async function startRecording() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            // Task 3: iPad safe setup
             let options = { mimeType: 'audio/mp4' };
             if (!MediaRecorder.isTypeSupported(options.mimeType)) {
                 options = { mimeType: 'audio/webm' };
             }
-
             mediaRecorder = new MediaRecorder(stream, options);
             audioChunks = [];
-
             mediaRecorder.ondataavailable = function(e) {
-                if (e.data && e.data.size > 0) {
-                    audioChunks.push(e.data);
-                }
+                if (e.data && e.data.size > 0) audioChunks.push(e.data);
             };
-
-            // 🎤 5. RECORD STOP BEHAVIOR
             mediaRecorder.onstop = function () {
                 const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
-                const fileName = `StudentNo_${studentNumber}.mp3`;
-                uploadToDrive(blob, fileName);
-                audioChunks = [];
+                audioURL = URL.createObjectURL(blob);
+                uploadToDrive(blob, `StudentNo_${studentNumber}.mp3`);
                 document.getElementById('btn-play-rec').disabled = false;
                 document.getElementById('rec-status').innerText = "";
-                stream.getTracks().forEach(t => t.stop());
+                stream.getTracks().forEach(track => track.stop());
             };
-
             mediaRecorder.start();
             document.getElementById('btn-record').disabled = true;
             document.getElementById('btn-stop-rec').disabled = false;
             document.getElementById('btn-play-rec').disabled = true;
             document.getElementById('rec-status').innerText = "🔴 Recording...";
         } catch (err) {
-            alert("Mic error: " + err.message);
+            alert("Microphone error.");
         }
     }
 
@@ -443,40 +413,33 @@
         }
     }
 
-    // 🔊 6. AUDIO PLAYBACK FIX
     function playRecording() {
         if (!audioURL) return;
         playbackAudio.src = audioURL;
-        playbackAudio.play().catch(() => {
-            alert("Tap again to play.");
-        });
+        playbackAudio.play().catch(() => alert("Tap again to play."));
     }
 
-    /* ============================================================
-       ⚙️ CORE APPLICATION LOGIC
-       ============================================================ */
-    const synth = window.speechSynthesis;
-    let currentSentenceText = "";
-    let isReadingSentence = false;
-
-    // 🧩 1. STUDENT NUMBER SELECTION
-    function initStudentSelection() {
+    // 🧩 Student Screen
+    function initStudentScreen() {
+        // 🧩 1. Remove background from container for this screen
+        document.getElementById('container').classList.remove('bg-menu');
+        
         const grid = document.getElementById('number-grid');
         grid.innerHTML = '';
         for (let i = 1; i <= 20; i++) {
             const box = document.createElement('div');
             box.className = 'num-box';
             box.innerText = i;
-            attachClick(box, () => {
+            addClick(box, () => {
                 studentNumber = i;
-                box.classList.add('selected'); // Turn grey
-                setTimeout(showSentenceSelection, 300);
+                box.classList.add('selected');
+                setTimeout(showSelectionScreen, 300);
             });
             grid.appendChild(box);
         }
     }
 
-    function showSentenceSelection() {
+    function showSelectionScreen() {
         const inputs = Array.from(document.querySelectorAll('.sentence-box')).map(i => i.value.trim()).filter(v => v !== "");
         const pool = inputs.length > 0 ? inputs : DEFAULT_DATA.sentences;
         const selected = pool.sort(() => 0.5 - Math.random()).slice(0, 4);
@@ -487,7 +450,7 @@
             const box = document.createElement('div');
             box.className = 'chibi-box';
             box.innerText = text;
-            attachClick(box, () => openPractice(text));
+            addClick(box, () => openPractice(text));
             grid.appendChild(box);
         });
 
@@ -508,7 +471,7 @@
             const btn = document.createElement('div');
             btn.className = 'word-btn';
             btn.innerText = word;
-            attachClick(btn, () => {
+            addClick(btn, () => {
                 if (isReadingSentence) return;
                 synth.cancel();
                 const utter = new SpeechSynthesisUtterance(word);
@@ -524,62 +487,67 @@
         document.getElementById('reading-screen').style.display = 'flex';
     }
 
-    // 🔁 7. RESET FUNCTION
-    function resetAll() {
-        if(confirm("Clear everything?")) {
-            document.getElementById('lesson-title').value = "";
-            document.querySelectorAll('.sentence-box').forEach(i => i.value = "");
-            localStorage.removeItem('mikee_hub_data');
-        }
+    // 🔁 2. RETURN TO STUDENT NUMBER
+    function finishAndReset() {
+        const star = document.getElementById('reward-star');
+        star.style.display = 'block';
+        
+        // Reset necessary states
+        synth.cancel();
+        playbackAudio.pause();
+        audioURL = "";
+        currentSentenceText = "";
+        
+        setTimeout(() => {
+            star.style.display = 'none';
+            document.getElementById('reading-screen').style.display = 'none';
+            document.getElementById('student-screen').style.display = 'flex';
+            document.getElementById('container').classList.remove('bg-practice');
+            // Re-init student screen to ensure fresh state
+            initStudentScreen();
+        }, 1200);
     }
 
-    // Initializations & Listeners
-    window.onload = () => {
-        const saved = localStorage.getItem('mikee_hub_data');
-        if (saved) {
-            const data = JSON.parse(saved);
-            document.getElementById('lesson-title').value = data.title;
-            const inputs = document.querySelectorAll('.sentence-box');
-            data.sentences.forEach((s, i) => { if(inputs[i]) inputs[i].value = s; });
-        } else {
-            document.getElementById('lesson-title').value = DEFAULT_DATA.title;
-            const inputs = document.querySelectorAll('.sentence-box');
-            DEFAULT_DATA.sentences.forEach((s, i) => { if(inputs[i]) inputs[i].value = s; });
-        }
-    };
-
-    attachClick(document.getElementById('start-btn'), () => {
+    // Initialization & Listeners
+    addClick(document.getElementById('start-btn'), () => {
         document.getElementById('main-menu').style.display = 'none';
         document.getElementById('student-screen').style.display = 'flex';
-        initStudentSelection();
+        initStudentScreen();
     });
 
-    attachClick(document.getElementById('open-input-btn'), () => {
+    addClick(document.getElementById('open-input-btn'), () => {
         document.getElementById('input-panel').style.display = 'block';
         document.getElementById('menu-buttons').style.display = 'none';
     });
 
-    attachClick(document.getElementById('close-input-btn'), () => {
+    addClick(document.getElementById('close-input-btn'), () => {
         document.getElementById('input-panel').style.display = 'none';
         document.getElementById('menu-buttons').style.display = 'flex';
     });
 
-    attachClick(document.getElementById('save-local-btn'), () => {
+    addClick(document.getElementById('save-local-btn'), () => {
         const data = {
             title: document.getElementById('lesson-title').value,
             sentences: Array.from(document.querySelectorAll('.sentence-box')).map(i => i.value)
         };
         localStorage.setItem('mikee_hub_data', JSON.stringify(data));
-        alert("Saved locally! ✨");
+        alert("Saved locally!");
     });
 
-    attachClick(document.getElementById('reset-input-btn'), resetAll);
+    addClick(document.getElementById('reset-btn'), () => {
+        if(confirm("Reset everything?")){
+            document.getElementById('lesson-title').value = "";
+            document.querySelectorAll('.sentence-box').forEach(i => i.value = "");
+            localStorage.removeItem('mikee_hub_data');
+        }
+    });
 
-    attachClick(document.getElementById('btn-record'), startRecording);
-    attachClick(document.getElementById('btn-stop-rec'), stopRecording);
-    attachClick(document.getElementById('btn-play-rec'), playRecording);
+    addClick(document.getElementById('btn-record'), startRecording);
+    addClick(document.getElementById('btn-stop-rec'), stopRecording);
+    addClick(document.getElementById('btn-play-rec'), playRecording);
+    addClick(document.getElementById('btn-finish'), finishAndReset);
 
-    attachClick(document.getElementById('btn-read-full'), () => {
+    addClick(document.getElementById('btn-read-full'), () => {
         if (isReadingSentence) return;
         synth.cancel();
         isReadingSentence = true;
@@ -589,49 +557,27 @@
         synth.speak(utter);
     });
 
-    attachClick(document.getElementById('btn-back-to-choice'), () => {
+    addClick(document.getElementById('btn-back-to-choice'), () => {
         document.getElementById('reading-screen').style.display = 'none';
         document.getElementById('choice-screen').style.display = 'flex';
     });
 
-    attachClick(document.getElementById('btn-finish'), () => {
-        const star = document.getElementById('reward-star');
-        star.style.display = 'block';
-        setTimeout(() => {
-            star.style.display = 'none';
-            document.getElementById('reading-screen').style.display = 'none';
-            document.getElementById('choice-screen').style.display = 'flex';
-        }, 1500);
-    });
+    addClick(document.getElementById('end-practice-btn'), () => location.reload());
 
-    attachClick(document.getElementById('end-practice-btn'), () => location.reload());
-
-    // Import/Export
-    attachClick(document.getElementById('export-btn'), () => {
-        const data = {
-            title: document.getElementById('lesson-title').value,
-            sentences: Array.from(document.querySelectorAll('.sentence-box')).map(i => i.value)
-        };
-        const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'Lesson.json';
-        a.click();
-    });
-
-    attachClick(document.getElementById('import-trigger'), () => document.getElementById('fileInput').click());
-    document.getElementById('fileInput').addEventListener('change', (e) => {
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            const data = JSON.parse(ev.target.result);
-            document.getElementById('lesson-title').value = data.title;
-            const inputs = document.querySelectorAll('.sentence-box');
-            data.sentences.forEach((s, i) => { if(inputs[i]) inputs[i].value = s; });
-        };
-        reader.readAsText(e.target.files[0]);
-    });
-
+    window.onload = () => {
+        const saved = localStorage.getItem('mikee_hub_data');
+        const lessonInput = document.getElementById('lesson-title');
+        const sentenceInputs = document.querySelectorAll('.sentence-box');
+        
+        if (saved) {
+            const data = JSON.parse(saved);
+            lessonInput.value = data.title;
+            data.sentences.forEach((s, i) => { if(sentenceInputs[i]) sentenceInputs[i].value = s; });
+        } else {
+            lessonInput.value = DEFAULT_DATA.title;
+            DEFAULT_DATA.sentences.forEach((s, i) => { if(sentenceInputs[i]) sentenceInputs[i].value = s; });
+        }
+    };
 </script>
-
 </body>
 </html>
