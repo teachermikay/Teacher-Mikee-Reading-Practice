@@ -18,10 +18,10 @@
             --grey: #d1d1d1;
         }
 
+        /* 📱 2. SCROLL + TOUCH FIX (CSS) */
         * {
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
-            /* Task 2: Fix touch action for scrolling consistency */
             touch-action: pan-y;
         }
 
@@ -46,7 +46,7 @@
             padding: 20px;
         }
 
-        /* Task 2: Scrollable screen system */
+        /* Task 2: Applied Scroll Consistency */
         .scrollable-screen {
             display: none;
             flex-direction: column;
@@ -155,7 +155,7 @@
         .btn-whole-sentence { background-color: #ffd93d; margin-bottom: 1vh; font-size: 1.3rem; }
         .btn-reset { background-color: #ff9aa2; color: white; }
 
-        /* Task 1: Student Number Grid */
+        /* 🧩 1. STUDENT NUMBER GRID LAYOUT */
         .number-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -179,7 +179,7 @@
 
         .num-box.selected { background-color: var(--grey) !important; }
 
-        /* Selection Screen Boxes */
+        /* Chibi Boxes */
         .chibi-box {
             width: 90%;
             min-height: 15vh;
@@ -284,7 +284,7 @@
             </div>
             <div class="btn-group">
                 <button style="background:var(--peach)" id="save-local-btn">💾 SAVE LOCAL</button>
-                <button class="btn-reset" id="reset-btn">🔄 RESET</button> <button style="background:var(--blue)" id="export-btn">📤 EXPORT</button>
+                <button class="btn-reset" id="reset-input-btn">🔄 RESET</button> <button style="background:var(--blue)" id="export-btn">📤 EXPORT</button>
                 <button style="background:var(--lavender)" id="import-trigger">📥 IMPORT</button>
                 <input type="file" id="fileInput" style="display:none" accept=".json">
                 <button style="background:#ddd" id="close-input-btn">CLOSE</button>
@@ -299,7 +299,7 @@
 
     <div id="choice-screen" class="scrollable-screen"></div>
 
-    <div id="reading-screen" class="scrollable-screen bg-practice" style="position:fixed; top:0; left:0; z-index:100; padding: 20px 0;">
+    <div id="reading-screen" class="scrollable-screen bg-practice" style="position:fixed; top:0; left:0; z-index:100; padding-top: 20px;">
         <div class="recording-container">
             <button id="btn-record" class="btn-rec">🎤 Record</button>
             <button id="btn-stop-rec" class="btn-stop" disabled>⏹ Stop</button>
@@ -333,32 +333,28 @@
         ]
     };
 
-    const synth = window.speechSynthesis;
-    let preferredVoice = null;
-    let isReadingSentence = false;
-    let currentSentenceText = "";
-    let studentNumber = 0; // Task 1 Variable
-    let audioURL = "";
-    let playbackAudio = new Audio(); // Task 6: Global audio object
-
     /* ============================================================
        📱 2. GLOBAL TOUCH FIX
        ============================================================ */
     let touchMoved = false;
-    document.addEventListener("touchstart", () => { touchMoved = false; }, { passive: true });
-    document.addEventListener("touchmove", () => { touchMoved = true; }, { passive: true });
+    document.addEventListener("touchstart", () => {
+        touchMoved = false;
+    }, { passive: true });
+    document.addEventListener("touchmove", () => {
+        touchMoved = true;
+    }, { passive: true });
 
-    function addClick(el, fn) {
-        el.addEventListener("click", (e) => {
+    function attachClick(el, callback) {
+        el.addEventListener("click", function(e) {
             if (touchMoved) return;
-            fn(e);
+            callback(e);
         });
     }
 
     /* ============================================================
-       ☁️ 4. GOOGLE DRIVE AUTO UPLOAD (FINAL FIX)
+       ☁️ 4. GOOGLE DRIVE AUTO UPLOAD (FINAL)
        ============================================================ */
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxczU9EnszQOoW-c4IzinmReW6MEXJRIpxPvMfYeqCT7OgEwq3vDrx6qO7iUBLNhFEkIQ/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwpP5mSqlhhKPT3Uicq_pstOKrYdYcEbxurE8jt8FohLxocZxYVVRA_QKjB7gR910jM/exec";
 
     async function uploadToDrive(blob, fileName) {
         const reader = new FileReader();
@@ -369,15 +365,15 @@
             formData.append("fileName", fileName);
 
             try {
-                const response = await fetch(SCRIPT_URL, {
+                // Task 4: Mode no-cors for direct trigger from GitHub Pages
+                await fetch(SCRIPT_URL, {
                     method: "POST",
-                    body: formData
+                    body: formData,
+                    mode: "no-cors"
                 });
-                const result = await response.text();
-                console.log("Upload Result:", result);
-                alert("✅ Recording uploaded successfully!");
+                alert("✅ Upload sent! Check Google Drive.");
             } catch (error) {
-                console.error("Upload Error:", error);
+                console.error(error);
                 alert("❌ Upload failed.");
             }
         };
@@ -385,15 +381,25 @@
     }
 
     /* ============================================================
-       🎤 3. VOICE RECORDING (iPAD SAFE)
+       🎤 3, 5, 6. VOICE RECORDING SYSTEM
        ============================================================ */
     let mediaRecorder;
     let audioChunks = [];
+    let studentNumber = 0;
+    let audioURL = "";
+    let playbackAudio = new Audio();
+
+    // 🔊 6. UNLOCK AUDIO FOR IPAD
+    document.body.addEventListener("click", function() {
+        let unlock = new Audio();
+        unlock.play().catch(()=>{});
+    }, { once: true });
 
     async function startRecording() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             
+            // Task 3: iPad safe setup
             let options = { mimeType: 'audio/mp4' };
             if (!MediaRecorder.isTypeSupported(options.mimeType)) {
                 options = { mimeType: 'audio/webm' };
@@ -408,18 +414,15 @@
                 }
             };
 
-            /* ============================================================
-               🎤 5. RECORD STOP BEHAVIOR
-               ============================================================ */
+            // 🎤 5. RECORD STOP BEHAVIOR
             mediaRecorder.onstop = function () {
                 const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
-                audioURL = URL.createObjectURL(blob);
                 const fileName = `StudentNo_${studentNumber}.mp3`;
                 uploadToDrive(blob, fileName);
                 audioChunks = [];
                 document.getElementById('btn-play-rec').disabled = false;
                 document.getElementById('rec-status').innerText = "";
-                stream.getTracks().forEach(track => track.stop());
+                stream.getTracks().forEach(t => t.stop());
             };
 
             mediaRecorder.start();
@@ -428,7 +431,7 @@
             document.getElementById('btn-play-rec').disabled = true;
             document.getElementById('rec-status').innerText = "🔴 Recording...";
         } catch (err) {
-            alert("Microphone error. Please allow access.");
+            alert("Mic error: " + err.message);
         }
     }
 
@@ -440,9 +443,7 @@
         }
     }
 
-    /* ============================================================
-       🔊 6. AUDIO PLAYBACK FIX
-       ============================================================ */
+    // 🔊 6. AUDIO PLAYBACK FIX
     function playRecording() {
         if (!audioURL) return;
         playbackAudio.src = audioURL;
@@ -451,32 +452,31 @@
         });
     }
 
-    // Task 6: Unlock Audio on first tap
-    document.body.addEventListener("click", function() {
-        let unlock = new Audio();
-        unlock.play().catch(()=>{});
-    }, { once: true });
-
     /* ============================================================
-       🧩 1. STUDENT NUMBER SCREEN
+       ⚙️ CORE APPLICATION LOGIC
        ============================================================ */
-    function initStudentScreen() {
+    const synth = window.speechSynthesis;
+    let currentSentenceText = "";
+    let isReadingSentence = false;
+
+    // 🧩 1. STUDENT NUMBER SELECTION
+    function initStudentSelection() {
         const grid = document.getElementById('number-grid');
         grid.innerHTML = '';
         for (let i = 1; i <= 20; i++) {
             const box = document.createElement('div');
             box.className = 'num-box';
             box.innerText = i;
-            addClick(box, () => {
+            attachClick(box, () => {
                 studentNumber = i;
                 box.classList.add('selected'); // Turn grey
-                setTimeout(showSelectionScreen, 300);
+                setTimeout(showSentenceSelection, 300);
             });
             grid.appendChild(box);
         }
     }
 
-    function showSelectionScreen() {
+    function showSentenceSelection() {
         const inputs = Array.from(document.querySelectorAll('.sentence-box')).map(i => i.value.trim()).filter(v => v !== "");
         const pool = inputs.length > 0 ? inputs : DEFAULT_DATA.sentences;
         const selected = pool.sort(() => 0.5 - Math.random()).slice(0, 4);
@@ -487,7 +487,7 @@
             const box = document.createElement('div');
             box.className = 'chibi-box';
             box.innerText = text;
-            addClick(box, () => openPractice(text));
+            attachClick(box, () => openPractice(text));
             grid.appendChild(box);
         });
 
@@ -508,11 +508,10 @@
             const btn = document.createElement('div');
             btn.className = 'word-btn';
             btn.innerText = word;
-            addClick(btn, () => {
+            attachClick(btn, () => {
                 if (isReadingSentence) return;
                 synth.cancel();
                 const utter = new SpeechSynthesisUtterance(word);
-                utter.voice = preferredVoice;
                 utter.rate = 0.7;
                 btn.classList.add('speaking');
                 utter.onend = () => btn.classList.remove('speaking');
@@ -525,114 +524,16 @@
         document.getElementById('reading-screen').style.display = 'flex';
     }
 
-    /* ============================================================
-       🔁 7. RESET BUTTON
-       ============================================================ */
-    function resetInput() {
-        if(confirm("Are you sure? This clears title and all sentences.")){
+    // 🔁 7. RESET FUNCTION
+    function resetAll() {
+        if(confirm("Clear everything?")) {
             document.getElementById('lesson-title').value = "";
             document.querySelectorAll('.sentence-box').forEach(i => i.value = "");
             localStorage.removeItem('mikee_hub_data');
         }
     }
 
-    /* ============================================================
-       ⚙️ CORE ENGINE
-       ============================================================ */
-    function loadVoices() {
-        const voices = synth.getVoices();
-        preferredVoice = voices.find(v => v.lang.includes('en-US')) || voices[0];
-    }
-    if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = loadVoices;
-
-    function saveLocal() {
-        const data = {
-            title: document.getElementById('lesson-title').value,
-            sentences: Array.from(document.querySelectorAll('.sentence-box')).map(i => i.value)
-        };
-        localStorage.setItem('mikee_hub_data', JSON.stringify(data));
-        alert("Saved locally! ✨");
-    }
-
-    // UI Bindings
-    addClick(document.getElementById('start-btn'), () => {
-        document.getElementById('main-menu').style.display = 'none';
-        document.getElementById('student-screen').style.display = 'flex';
-        initStudentScreen();
-    });
-
-    addClick(document.getElementById('open-input-btn'), () => {
-        document.getElementById('input-panel').style.display = 'block';
-        document.getElementById('menu-buttons').style.display = 'none';
-    });
-
-    addClick(document.getElementById('close-input-btn'), () => {
-        document.getElementById('input-panel').style.display = 'none';
-        document.getElementById('menu-buttons').style.display = 'flex';
-    });
-
-    addClick(document.getElementById('save-local-btn'), saveLocal);
-    addClick(document.getElementById('reset-btn'), resetInput);
-    addClick(document.getElementById('btn-record'), startRecording);
-    addClick(document.getElementById('btn-stop-rec'), stopRecording);
-    addClick(document.getElementById('btn-play-rec'), playRecording);
-
-    addClick(document.getElementById('btn-read-full'), () => {
-        if (isReadingSentence) return;
-        synth.cancel();
-        isReadingSentence = true;
-        const utter = new SpeechSynthesisUtterance(currentSentenceText);
-        utter.voice = preferredVoice;
-        utter.rate = 0.7;
-        utter.onend = () => isReadingSentence = false;
-        synth.speak(utter);
-    });
-
-    addClick(document.getElementById('btn-back-to-choice'), () => {
-        document.getElementById('reading-screen').style.display = 'none';
-        document.getElementById('choice-screen').style.display = 'flex';
-    });
-
-    addClick(document.getElementById('btn-finish'), () => {
-        const star = document.getElementById('reward-star');
-        star.style.display = 'block';
-        setTimeout(() => {
-            star.style.display = 'none';
-            document.getElementById('reading-screen').style.display = 'none';
-            document.getElementById('choice-screen').style.display = 'flex';
-        }, 1200);
-    });
-
-    addClick(document.getElementById('end-practice-btn'), () => {
-        location.reload();
-    });
-
-    // Import/Export Logic
-    addClick(document.getElementById('export-btn'), () => {
-        const data = {
-            title: document.getElementById('lesson-title').value,
-            sentences: Array.from(document.querySelectorAll('.sentence-box')).map(i => i.value)
-        };
-        const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'Lesson.json';
-        a.click();
-    });
-
-    addClick(document.getElementById('import-trigger'), () => document.getElementById('fileInput').click());
-    document.getElementById('fileInput').addEventListener('change', (e) => {
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            const data = JSON.parse(ev.target.result);
-            document.getElementById('lesson-title').value = data.title;
-            const inputs = document.querySelectorAll('.sentence-box');
-            data.sentences.forEach((s, i) => { if(inputs[i]) inputs[i].value = s; });
-        };
-        reader.readAsText(e.target.files[0]);
-    });
-
-    // Initial Load
+    // Initializations & Listeners
     window.onload = () => {
         const saved = localStorage.getItem('mikee_hub_data');
         if (saved) {
@@ -645,8 +546,91 @@
             const inputs = document.querySelectorAll('.sentence-box');
             DEFAULT_DATA.sentences.forEach((s, i) => { if(inputs[i]) inputs[i].value = s; });
         }
-        loadVoices();
     };
+
+    attachClick(document.getElementById('start-btn'), () => {
+        document.getElementById('main-menu').style.display = 'none';
+        document.getElementById('student-screen').style.display = 'flex';
+        initStudentSelection();
+    });
+
+    attachClick(document.getElementById('open-input-btn'), () => {
+        document.getElementById('input-panel').style.display = 'block';
+        document.getElementById('menu-buttons').style.display = 'none';
+    });
+
+    attachClick(document.getElementById('close-input-btn'), () => {
+        document.getElementById('input-panel').style.display = 'none';
+        document.getElementById('menu-buttons').style.display = 'flex';
+    });
+
+    attachClick(document.getElementById('save-local-btn'), () => {
+        const data = {
+            title: document.getElementById('lesson-title').value,
+            sentences: Array.from(document.querySelectorAll('.sentence-box')).map(i => i.value)
+        };
+        localStorage.setItem('mikee_hub_data', JSON.stringify(data));
+        alert("Saved locally! ✨");
+    });
+
+    attachClick(document.getElementById('reset-input-btn'), resetAll);
+
+    attachClick(document.getElementById('btn-record'), startRecording);
+    attachClick(document.getElementById('btn-stop-rec'), stopRecording);
+    attachClick(document.getElementById('btn-play-rec'), playRecording);
+
+    attachClick(document.getElementById('btn-read-full'), () => {
+        if (isReadingSentence) return;
+        synth.cancel();
+        isReadingSentence = true;
+        const utter = new SpeechSynthesisUtterance(currentSentenceText);
+        utter.rate = 0.7;
+        utter.onend = () => isReadingSentence = false;
+        synth.speak(utter);
+    });
+
+    attachClick(document.getElementById('btn-back-to-choice'), () => {
+        document.getElementById('reading-screen').style.display = 'none';
+        document.getElementById('choice-screen').style.display = 'flex';
+    });
+
+    attachClick(document.getElementById('btn-finish'), () => {
+        const star = document.getElementById('reward-star');
+        star.style.display = 'block';
+        setTimeout(() => {
+            star.style.display = 'none';
+            document.getElementById('reading-screen').style.display = 'none';
+            document.getElementById('choice-screen').style.display = 'flex';
+        }, 1500);
+    });
+
+    attachClick(document.getElementById('end-practice-btn'), () => location.reload());
+
+    // Import/Export
+    attachClick(document.getElementById('export-btn'), () => {
+        const data = {
+            title: document.getElementById('lesson-title').value,
+            sentences: Array.from(document.querySelectorAll('.sentence-box')).map(i => i.value)
+        };
+        const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'Lesson.json';
+        a.click();
+    });
+
+    attachClick(document.getElementById('import-trigger'), () => document.getElementById('fileInput').click());
+    document.getElementById('fileInput').addEventListener('change', (e) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const data = JSON.parse(ev.target.result);
+            document.getElementById('lesson-title').value = data.title;
+            const inputs = document.querySelectorAll('.sentence-box');
+            data.sentences.forEach((s, i) => { if(inputs[i]) inputs[i].value = s; });
+        };
+        reader.readAsText(e.target.files[0]);
+    });
+
 </script>
 
 </body>
